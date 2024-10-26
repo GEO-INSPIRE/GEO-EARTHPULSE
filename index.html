@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EarthPulse</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #2f16ac;
+            color: white;
+            padding: 10px 0;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        header img {
+            max-width: 120px;
+            display: block;
+            margin: 0 auto 10px;
+        }
+        nav {
+            background-color: #1c23b5;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        nav a {
+            color: white;
+            margin: 0 15px;
+            text-decoration: none;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        main {
+            padding: 20px;
+        }
+        section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .search-bar {
+            margin-bottom: 10px;
+        }
+        .alert {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .haute { background-color: red; }
+        .moyenne { background-color: orange; }
+        .basse { background-color: green; }
+        #map, #threejs-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        canvas {
+            max-width: 100%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        th { background-color: #2915dc; color: white; }
+        button {
+            padding: 10px 15px;
+            background-color: #1c23b5;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #2c3e50; }
+        #filter { margin-bottom: 10px; }
+        .theme-toggle { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="image.png (2).png" alt="Logo d'EarthPulse" />
+        <h1>EarthPulse</h1>
+        <p>Surveillance Environnementale et Alertes</p>
+        <input type="text" id="username" placeholder="Nom d'utilisateur" />
+        <input type="password" id="password" placeholder="Mot de passe" />
+        <button id="login">Connexion</button>
+    </header>
+    <nav>
+        <a href="#addAlert">Ajouter Alerte</a>
+        <a href="#alerts">Alertes</a>
+        <a href="#history">Historique des Alertes</a>
+        <a href="#chart">Graphique des Alertes</a>
+        <a href="#download">Télécharger</a>
+        <a href="#sendEmail">Envoyer Alerte</a>
+        <a href="#share">Partager</a>
+    </nav>
+    <main>
+        <section id="addAlert">
+            <h2>Ajouter une Alerte</h2>
+            <input type="text" id="alertMessage" placeholder="Message d'alerte" required />
+            <select id="alertSeverity">
+                <option value="haute">Haute</option>
+                <option value="moyenne">Moyenne</option>
+                <option value="basse">Basse</option>
+            </select>
+            <select id="alertCategory">
+                <option value="pollution">Pollution</option>
+                <option value="securite">Sécurité</option>
+                <option value="environnement">Environnement</option>
+            </select>
+            <input type="text" id="alertCityManual" placeholder="Ville" required />
+            <input type="text" id="alertCoordinates" placeholder="Coordonnées (Lat, Lon)" required />
+            <button id="addAlertButton">Ajouter Alerte</button>
+            <button id="currentLocationAlert">Alerte Basée sur Localisation</button>
+        </section>
+
+        <section id="alerts">
+            <h2>Alertes</h2>
+            <div class="search-bar">
+                <input type="text" id="searchBar" placeholder="Rechercher des alertes..." />
+            </div>
+            <div id="filter">
+                <label for="severityFilter">Filtrer par gravité:</label>
+                <select id="severityFilter">
+                    <option value="">Tous</option>
+                    <option value="haute">Haute</option>
+                    <option value="moyenne">Moyenne</option>
+                    <option value="basse">Basse</option>
+                </select>
+                <label for="categorySelect">Filtrer par catégorie:</label>
+                <select id="categorySelect">
+                    <option value="">Tous</option>
+                    <option value="pollution">Pollution</option>
+                    <option value="securite">Sécurité</option>
+                    <option value="environnement">Environnement</option>
+                </select>
+                <label for="dateFilter">Filtrer par date:</label>
+                <input type="date" id="dateFilter" />
+            </div>
+            <div id="alertsDisplay"></div>
+        </section>
+
+        <section id="history">
+            <h2>Historique des Alertes</h2>
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Gravité</th>
+                        <th>Catégorie</th>
+                        <th>Message</th>
+                        <th>Ville</th>
+                        <th>Coordonnées</th>
+                        <th>Cause</th>
+                        <th>Conséquence</th>
+                        <th>Solution</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <section id="chart">
+            <h2>Graphique des Alertes</h2>
+            <canvas id="alertChart"></canvas>
+            <button id="downloadChart">Télécharger Graphique</button>
+        </section>
+
+        <section id="categoryChart">
+            <h2>Distribution des Alertes par Catégorie</h2>
+            <canvas id="categoryChartCanvas"></canvas>
+        </section>
+
+        <section id="download">
+            <h2>Télécharger les Données</h2>
+            <button id="downloadData">Télécharger les Données en JSON</button>
+            <button id="downloadDataCSV">Télécharger les Données en CSV</button>
+        </section>
+
+        <section id="share">
+            <h2>Partager sur les Réseaux Sociaux</h2>
+            <button id="shareFacebook"><i class="fab fa-facebook"></i> Partager sur Facebook</button>
+            <button id="shareTwitter"><i class="fab fa-twitter"></i> Partager sur Twitter</button>
+        </section>
+
+        <div id="map"></div>
+
+        <section id="alert3DVisualization">
+            <h2>Visualisation 3D des Alertes</h2>
+            <div id="threejs-container" style="width: 100%; height: 400px;"></div>
+        </section>
+
+        <section id="sendEmail">
+            <h2>Envoyer un E-mail d'Alerte</h2>
+            <input type="email" id="email" placeholder="Votre e-mail" />
+            <button id="sendEmailButton">Envoyer Alerte par E-mail</button>
+            <button id="generateReport">Générer Rapport PDF</button>
+        </section>
+
+        <section>
+            <button class="theme-toggle" id="toggleTheme">Changer de Thème</button>
+        </section>
+    </main>
+
+    <audio id="alertSound" src="path/to/alert-sound.mp3" preload="auto"></audio>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/push.js/1.0.8/push.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.3.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const alertData = {
+            'Cotonou': { cause: 'Pollution industrielle', consequence: 'Problèmes respiratoires', solution: 'Réduire les émissions des usines' },
+            'Porto-Novo': { cause: 'Déforestation', consequence: 'Érosion des sols', solution: 'Reboisement' },
+            'Parakou': { cause: 'Inondations', consequence: 'Dommages matériels', solution: 'Améliorer le drainage' },
+            'Abomey-Calavi': { cause: 'Urbanisation rapide', consequence: 'Surcharge des infrastructures', solution: 'Planification urbaine' },
+            'Ouidah': { cause: 'Érosion côtière', consequence: 'Perte de terres', solution: 'Construction de digues' },
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialisation des éléments
+            const alertsElement = document.getElementById('alertsDisplay');
+            const historyTable = document.getElementById('history-table').querySelector('tbody');
+            const alertCounts = {};
+            const categoryCounts = {};
+            const alerts = [];
+            const chartData = {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Nombre d\'Alertes',
+                        data: [],
+                        backgroundColor: ['red', 'orange', 'green'],
+                    }
+                ]
+            };
+
+            const alertChart = new Chart(document.getElementById('alertChart'), {
+                type: 'bar',
+                data: chartData,
+                options: { scales: { y: { beginAtZero: true } } }
+            });
+
+            const categoryChartData = {
+                labels: [],
+                datasets: [{ label: 'Alertes par Catégorie', data: [], backgroundColor: ['red', 'orange', 'yellow', 'green', 'blue'] }]
+            };
+
+            const categoryChart = new Chart(document.getElementById('categoryChartCanvas'), {
+                type: 'bar',
+                data: categoryChartData,
+                options: { scales: { y: { beginAtZero: true } } }
+            });
+
+            // Initialisation de Three.js
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, 400);
+            document.getElementById('threejs-container').appendChild(renderer.domElement);
+            const ambientLight = new THREE.AmbientLight(0xffffff);
+            scene.add(ambientLight);
+            const pointLight = new THREE.PointLight(0xffffff);
+            scene.add(pointLight);
+            camera.position.z = 5;
+
+            function addAlert3D(lat, lon, severity) {
+                const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                let color;
+                switch (severity) {
+                    case 'haute':
+                        color = 0xff0000; // Rouge
+                        break;
+                    case 'moyenne':
+                        color = 0xffff00; // Jaune
+                        break;
+                    case 'basse':
+                        color = 0x00ff00; // Vert
+                        break;
+                }
+                const material = new THREE.MeshPhongMaterial({ color });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(lon / 20, lat / 20, 0);
+                scene.add(cube);
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+
+            function update3DVisualization() {
+                scene.children.forEach(child => {
+                    if (child instanceof THREE.Mesh) scene.remove(child);
+                });
+                alerts.forEach(alert => {
+                    const coordinates = alert.coordinates.split(',').map(Number);
+                    addAlert3D(coordinates[0], coordinates[1], alert.alertSeverity);
+                });
+            }
+
+            animate();
+
+            document.getElementById('login').addEventListener('click', () => {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                alert(`Bienvenue, ${username}`);
+            });
+
+            setTimeout(() => {
+                const simulatedData = [
+                    { date: new Date().toLocaleString(), alertSeverity: 'haute', alertMessage: 'Incendie détecté', alertCity: 'Cotonou', coordinates: '6.3650, 2.4229', cause: 'Conditions climatiques', consequence: 'Dommages matériels', solution: 'Évacuer la zone', category: 'securite' },
+                    { date: new Date().toLocaleString(), alertSeverity: 'moyenne', alertMessage: 'Pollution de l\'air', alertCity: 'Porto-Novo', coordinates: '6.4969, 2.6289', cause: 'Émissions industrielles', consequence: 'Problèmes de santé', solution: 'Réduire les émissions', category: 'pollution' },
+                ];
+                simulatedData.forEach(alert => {
+                    addAlertToUI(alert.date, alert.alertSeverity, alert.alertMessage, alert.alertCity, alert.coordinates, alert.cause, alert.consequence, alert.solution, alert.category);
+                });
+            }, 1000);
+
+            document.getElementById('addAlertButton').addEventListener('click', () => {
+                const alertMessage = document.getElementById('alertMessage').value.trim();
+                const alertSeverity = document.getElementById('alertSeverity').value;
+                const alertCity = document.getElementById('alertCityManual').value.trim();
+                const alertCoordinates = document.getElementById('alertCoordinates').value.trim();
+                const alertCategory = document.getElementById('alertCategory').value;
+
+                // Validation des entrées
+                if (!alertMessage || !alertCity || !alertCoordinates) {
+                    alert('Veuillez remplir tous les champs obligatoires.');
+                    return;
+                }
+                if (!validateCoordinates(alertCoordinates)) {
+                    alert('Veuillez entrer des coordonnées valides (format: Lat, Lon).');
+                    return;
+                }
+
+                const alertInfo = alertData[alertCity] || { cause: 'Inconnue', consequence: 'Inconnue', solution: 'Aucune solution proposée' };
+                const alertCause = alertInfo.cause;
+                const alertConsequence = alertInfo.consequence;
+                const alertSolution = alertInfo.solution;
+
+                const date = new Date().toLocaleString();
+                addAlertToUI(date, alertSeverity, alertMessage, alertCity, alertCoordinates, alertCause, alertConsequence, alertSolution, alertCategory);
+                update3DVisualization();
+                addMarkerToMap(alertCity); // Ajouter un marqueur sur la carte
+            });
+
+            document.getElementById('currentLocationAlert').addEventListener('click', () => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(position => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const date = new Date().toLocaleString();
+                        addAlertToUI(date, 'haute', 'Alerte basée sur votre localisation', `Latitude: ${lat}, Longitude: ${lon}`, `${lat}, ${lon}`, 'Localisation', 'Alerte de sécurité', 'Suivre les instructions locales', 'securite');
+                        update3DVisualization();
+                    }, () => {
+                        alert('Il est impossible de récupérer votre position.');
+                    });
+                } else {
+                    alert('La géolocalisation n\'est pas supportée par ce navigateur.');
+                }
+            });
+
+            document.getElementById('severityFilter').addEventListener('change', (event) => {
+                const severity = event.target.value;
+                updateAlertDisplay(severity);
+            });
+
+            document.getElementById('categorySelect').addEventListener('change', function(event) {
+                const selectedCategory = event.target.value;
+                updateAlertDisplayByCategory(selectedCategory);
+            });
+
+            document.getElementById('dateFilter').addEventListener('input', (event) => {
+                const selectedDate = event.target.value;
+                updateAlertDisplayByDate(selectedDate);
+            });
+
+            document.getElementById('searchBar').addEventListener('input', (event) => {
+                const searchTerm = event.target.value.toLowerCase();
+                updateAlertDisplayBySearch(searchTerm);
+            });
+
+            document.getElementById('sendEmailButton').addEventListener('click', () => {
+                const emailAddress = document.getElementById('email').value;
+                sendAlertEmail(emailAddress);
+            });
+
+            document.getElementById('generateReport').addEventListener('click', () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                doc.text("Historique des Alertes", 10, 10);
+                alerts.forEach(alert => {
+                    doc.text(`${alert.date}: ${alert.alertMessage} - ${alert.alertCity}`, 10, 20 + (alerts.indexOf(alert) * 10));
+                });
+                doc.save("rapport_alertes.pdf");
+            });
+
+            document.getElementById('downloadDataCSV').addEventListener('click', () => {
+                const csvContent = "data:text/csv;charset=utf-8," + alerts.map(alert => {
+                    return `${alert.date},${alert.alertSeverity},${alert.category},${alert.alertMessage},${alert.alertCity},${alert.coordinates},${alert.cause},${alert.consequence},${alert.solution}`;
+                }).join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement('a');
+                link.setAttribute('href', encodedUri);
+                link.setAttribute('download', 'alerts_data.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            function validateCoordinates(coordinates) {
+                const regex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
+                return regex.test(coordinates);
+            }
+
+            function addAlertToUI(date, alertSeverity, alertMessage, alertCity, coordinates, cause, consequence, solution, category) {
+                const alertDiv = document.createElement('div');
+                alertDiv.classList.add('alert', alertSeverity);
+                alertDiv.textContent = `${date}: [${category}] ${alertMessage} - ${alertCity}`;
+                alertDiv.onclick = () => {
+                    alert(`Cause: ${cause}\nConséquence: ${consequence}\nSolution: ${solution}`);
+                };
+                alertsElement.appendChild(alertDiv);
+
+                alerts.push({ date, alertSeverity, alertMessage, alertCity, coordinates, cause, consequence, solution, category });
+                const row = historyTable.insertRow();
+                row.insertCell(0).textContent = date;
+                row.insertCell(1).textContent = alertSeverity;
+                row.insertCell(2).textContent = category;
+                row.insertCell(3).textContent = alertMessage;
+                row.insertCell(4).textContent = alertCity;
+                row.insertCell(5).textContent = coordinates;
+                row.insertCell(6).textContent = cause;
+                row.insertCell(7).textContent = consequence;
+                row.insertCell(8).textContent = solution;
+
+                alertCounts[alertSeverity] = (alertCounts[alertSeverity] || 0) + 1;
+                categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+                updateChart();
+                updateCategoryChart();
+                document.getElementById('alertSound').play();
+                notifyUser(alertMessage);
+            }
+
+            function updateAlertDisplay(severity) {
+                alertsElement.innerHTML = '';
+                alerts.forEach(alert => {
+                    if (severity === '' || alert.alertSeverity === severity) {
+                        const alertDiv = document.createElement('div');
+                        alertDiv.classList.add('alert', alert.alertSeverity);
+                        alertDiv.textContent = `${alert.date}: [${alert.category}] ${alert.alertMessage} - ${alert.alertCity}`;
+                        alertDiv.onclick = () => {
+                            alert(`Cause: ${alert.cause}\nConséquence: ${alert.consequence}\nSolution: ${alert.solution}`);
+                        };
+                        alertsElement.appendChild(alertDiv);
+                    }
+                });
+            }
+
+            function updateAlertDisplayByCategory(selectedCategory) {
+                alertsElement.innerHTML = '';
+                alerts.forEach(alert => {
+                    if (selectedCategory === '' || alert.category === selectedCategory) {
+                        const alertDiv = document.createElement('div');
+                        alertDiv.classList.add('alert', alert.alertSeverity);
+                        alertDiv.textContent = `${alert.date}: [${alert.category}] ${alert.alertMessage} - ${alert.alertCity}`;
+                        alertDiv.onclick = () => {
+                            alert(`Cause: ${alert.cause}\nConséquence: ${alert.consequence}\nSolution: ${alert.solution}`);
+                        };
+                        alertsElement.appendChild(alertDiv);
+                    }
+                });
+            }
+
+            function updateAlertDisplayByDate(selectedDate) {
+                alertsElement.innerHTML = '';
+                const filterDate = new Date(selectedDate).toLocaleDateString();
+                alerts.forEach(alert => {
+                    const alertDate = new Date(alert.date).toLocaleDateString();
+                    if (filterDate === alertDate) {
+                        const alertDiv = document.createElement('div');
+                        alertDiv.classList.add('alert', alert.alertSeverity);
+                        alertDiv.textContent = `${alert.date}: [${alert.category}] ${alert.alertMessage} - ${alert.alertCity}`;
+                        alertDiv.onclick = () => {
+                            alert(`Cause: ${alert.cause}\nConséquence: ${alert.consequence}\nSolution: ${alert.solution}`);
+                        };
+                        alertsElement.appendChild(alertDiv);
+                    }
+                });
+            }
+
+            function updateAlertDisplayBySearch(searchTerm) {
+                alertsElement.innerHTML = '';
+                alerts.forEach(alert => {
+                    if (alert.alertMessage.toLowerCase().includes(searchTerm) || alert.alertCity.toLowerCase().includes(searchTerm)) {
+                        const alertDiv = document.createElement('div');
+                        alertDiv.classList.add('alert', alert.alertSeverity);
+                        alertDiv.textContent = `${alert.date}: [${alert.category}] ${alert.alertMessage} - ${alert.alertCity}`;
+                        alertDiv.onclick = () => {
+                            alert(`Cause: ${alert.cause}\nConséquence: ${alert.consequence}\nSolution: ${alert.solution}`);
+                        };
+                        alertsElement.appendChild(alertDiv);
+                    }
+                });
+            }
+
+            // Configuration de la carte
+            const map = L.map('map').setView([9.5, 2.5], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            const cities = [
+                { name: 'Cotonou', lat: 6.3650, lon: 2.4229 },
+                { name: 'Porto-Novo', lat: 6.4969, lon: 2.6289 },
+                { name: 'Parakou', lat: 9.3429, lon: 2.6057 },
+                { name: 'Abomey-Calavi', lat: 6.4531, lon: 2.3155 },
+                { name: 'Ouidah', lat: 6.3166, lon: 2.2879 },
+            ];
+
+            cities.forEach(city => {
+                L.marker([city.lat, city.lon]).addTo(map)
+                    .bindPopup(city.name).on('click', () => {
+                        const alertInfo = alertData[city.name] || { cause: 'Inconnue', consequence: 'Inconnue', solution: 'Aucune solution proposée' };
+                        alert(`Ville: ${city.name}\nCause: ${alertInfo.cause}\nConséquence: ${alertInfo.consequence}\nSolution: ${alertInfo.solution}`);
+                    });
+            });
+
+            function addMarkerToMap(city) {
+                const cityData = cities.find(c => c.name.toLowerCase() === city.toLowerCase());
+                if (cityData) {
+                    L.marker([cityData.lat, cityData.lon]).addTo(map)
+                        .bindPopup(`${cityData.name}`).openPopup();
+                }
+            }
+
+            function updateChart() {
+                alertChart.data.labels = Object.keys(alertCounts);
+                alertChart.data.datasets[0].data = Object.values(alertCounts);
+                alertChart.update();
+            }
+
+            function updateCategoryChart() {
+                categoryChart.data.labels = Object.keys(categoryCounts);
+                categoryChart.data.datasets[0].data = Object.values(categoryCounts);
+                categoryChart.update();
+            }
+
+            document.getElementById('downloadChart').addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.href = alertChart.toBase64Image();
+                link.download = 'alert_chart.png';
+                link.click();
+            });
+
+            document.getElementById('downloadData').addEventListener('click', () => {
+                const blob = new Blob([JSON.stringify(alerts, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'alerts_data.json';
+                link.click();
+            });
+
+            function notifyUser(message) {
+                Push.create("Nouvelle Alerte", {
+                    body: message,
+                    timeout: 4000,
+                    onClick: function () {
+                        window.focus();
+                        this.close();
+                    }
+                });
+            }
+
+            function sendAlertEmail(emailAddress) {
+                if (emailAddress) {
+                    alert(`Alerte envoyée à ${emailAddress}`);
+                } else {
+                    alert('Veuillez entrer un email valide.');
+                }
+            }
+
+            document.getElementById('toggleTheme').addEventListener('click', () => {
+                document.body.classList.toggle('dark-theme');
+                const newTheme = document.body.classList.contains('dark-theme') ? 'Sombre' : 'Clair';
+                alert(`Thème changé en ${newTheme}`);
+            });
+
+            document.getElementById('shareFacebook').addEventListener('click', () => {
+                const url = window.location.href; // lien de la page actuelle
+                const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+                window.open(facebookShareUrl, '_blank');
+            });
+
+            document.getElementById('shareTwitter').addEventListener('click', () => {
+                const url = window.location.href; // lien de la page actuelle
+                const text = "Regardez cet outil de surveillance environnementale!";
+                const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+                window.open(twitterShareUrl, '_blank');
+            });
+
+            const checkSensorAlerts = () => {
+                const randomSeverity = ['haute', 'moyenne', 'basse'][Math.floor(Math.random() * 3)];
+                const randomCategory = ['pollution', 'securite', 'environnement'][Math.floor(Math.random() * 3)];
+                const randomCity = cities[Math.floor(Math.random() * cities.length)];
+                addAlertToUI(new Date().toLocaleString(), randomSeverity, `Alerte de test à ${randomSeverity}`, randomCity.name, `${randomCity.lat}, ${randomCity.lon}`, 'Test', 'Alerte de test', 'Aucune action requise', randomCategory);
+                update3DVisualization();
+            };
+
+            setInterval(checkSensorAlerts, 5000);
+        });
+    </script>
+</body>
+</html>
